@@ -1,0 +1,12 @@
+{
+    "Descargar_video": false,
+    "Descargar_audio": true,
+    "Utilizar_playlist_YouTube": false,
+    "Utilizar_playlist_Spotify": false,
+    "Eliminar_canciones.txt_automaticamente": true,
+    "Utilizar_link_de_YouTube": true,
+    "Utilizar_link_de_Spotify": false,
+    "Utilizar_canciones.txt": false,
+    "Utilizar_varias_carpetas": true,
+    "Utilizarffmpeg": false
+}
