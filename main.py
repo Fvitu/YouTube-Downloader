@@ -1,14 +1,15 @@
 from spotipy.oauth2 import SpotifyClientCredentials
 from youtubesearchpython import VideosSearch
 from pydub import AudioSegment
-from pytube import Playlist
 from platform import system
+from pytube import Playlist
 from pytube import YouTube
 from time import sleep
 from art import *
 import spotipy
 import shutil
 import json
+import sys
 import os
 
 #------------------------------#
@@ -32,12 +33,13 @@ except:
         "Descargar_audio": True,
         "Utilizar_playlist_YouTube": False,
         "Utilizar_playlist_Spotify": False,
-        "Eliminar_canciones.txt_automaticamente": True,
+        "Eliminar_canciones.txt_automaticamente": False,
         "Utilizar_link_de_YouTube": True,
         "Utilizar_link_de_Spotify": False,
         "Utilizar_canciones.txt": False,
         "Utilizar_varias_carpetas": True,
-        "Utilizarffmpeg": False
+        "Utilizarffmpeg": True,
+        "Directorio": "/",
     }
     with open('config.json', 'w') as f:
         json.dump(config, f, indent=4)
@@ -49,7 +51,7 @@ except:
     sleep(2)
     limpiar_pantalla()
 
-    print("Bienvenido, aquí podrá descargar videos o audios de YouTube totalmente gratis y de manera sencilla. Solo tendrá que configurar el archivo llamado 'config.json' para poder utilizar esta aplicación. Gracias")
+    print("Bienvenido a esta aplicación creada por Fvitu, aquí podrá descargar videos o audios de YouTube totalmente gratis y de manera sencilla. Solo tendrá que configurar el archivo llamado 'config.json' para poder utilizar esta aplicación. Gracias")
 
     if not os.path.exists("canciones.txt"):
         with open("canciones.txt", 'w') as f:
@@ -95,61 +97,99 @@ def mover_a_carpeta(cancion, carpeta):
 #------------------------------#
 
 
+def archivo_duplicado(directorio, tipo, nombre):
+    try:
+        if directorio == "/":
+            directorio = os.path.dirname(os.path.abspath(sys.argv[0]))  # Directorio del script
+
+        if tipo == "Audio":
+            directorio = os.path.join(directorio, "Audio")
+
+        if tipo == "Video":
+            directorio = os.path.join(directorio, "Video")
+
+        archivos_en_ruta_actual = os.listdir(directorio)
+
+        for archivo in archivos_en_ruta_actual:
+            if archivo == nombre:
+                return True
+    except:
+        return False
+
+
+#------------------------------#
+
+
 def descargar_audio(url):
     try:
         yt = YouTube(url)
         titulo = yt.title
-        print(f"🡳  Descargando audio de: '{titulo}'...")
-        stream = yt.streams.filter(only_audio=True).first()
-        stream.download()
+        carpeta_descarga = config.get("Directorio", "Canciones")  # Obtenemos la carpeta de descarga desde la configuración o usamos "Canciones" por defecto.
 
-        if config["Utilizarffmpeg"]:
-            mp4_file = stream.default_filename
-
-            mp3_file = mp4_file.replace('.mp4', '.mp3')
-            audio = AudioSegment.from_file(mp4_file, format="mp4")
-            audio.export(mp3_file, format="mp3")
-
-            os.remove(mp4_file)
-
-            if not config["Utilizar_varias_carpetas"]:
-                mover_a_canciones(os.path.basename(mp3_file))
+        if carpeta_descarga == "/":
+            carpeta_descarga = os.path.dirname(os.path.abspath(__file__))  # Directorio del script en lugar de "/"
+        
+        carpeta_audio = os.path.join(carpeta_descarga, "Audio")
+        mp3_file = os.path.join(carpeta_audio, f"{titulo}.mp3")
+        mp3_file = os.path.normpath(mp3_file)
+        
+        if not archivo_duplicado(carpeta_descarga, "Audio", f"{titulo}.mp3"):
+            print(f"🡳  Descargando audio de: '{titulo}'...")
+            stream = yt.streams.filter(only_audio=True).first()
+            stream.download()
+            
+            if not os.path.exists(carpeta_audio):
+                os.makedirs(carpeta_audio)
+            
+            if config.get("Utilizarffmpeg", False):
+                mp4_file = stream.default_filename
+                audio = AudioSegment.from_file(mp4_file, format="mp4")
+                audio.export(mp3_file, format="mp3")
+                os.remove(mp4_file)
+            
             else:
-                mover_a_carpeta(os.path.basename(mp3_file), "Audio")
-
+                os.rename(stream.default_filename, mp3_file)
+            print(f"✔️  Se ha descargado '{titulo}' con éxito.\n")
+        
         else:
-            if not config["Utilizar_varias_carpetas"]:
-                mover_a_canciones(stream.default_filename)
-            else:
-                mover_a_carpeta(stream.default_filename, "Audio")
+            print(f"✘ Salteando {titulo} debido a que ya se ha descargado...\n")
 
-        print(f"✔️  Se ha descargado '{titulo}' con éxito.\n")
-
-    except:
-        print("❌ Ocurrió un error al descargar el archivo, intente de nuevo.")
-        exit()
+    except Exception as e:
+        print(f"❌ Ocurrió un error al descargar el audio: {e}\n")
 
 #------------------------------#
+
 
 
 def descargar_video(url=False):
     try:
         yt = YouTube(url)
         titulo = yt.title
-        print(f"🡳  Descargando video  de: '{titulo}'...")
-        stream = yt.streams.get_highest_resolution()
-        stream.download()
+        carpeta_descarga = config.get("Directorio", "Canciones")
 
-        if not config["Utilizar_varias_carpetas"]:
-            mover_a_canciones(stream.default_filename)
+        if carpeta_descarga == "/":
+            carpeta_descarga = os.path.dirname(os.path.abspath(__file__))
+    
+        mp4_file = os.path.join(carpeta_descarga, "Video", f"{titulo}.mp4")
+        mp4_file = os.path.normpath(mp4_file)
+        
+        if not archivo_duplicado(carpeta_descarga, "Video", f"{titulo}.mp4"):
+            print(f"🡳  Descargando video de: '{titulo}'...")
+            stream = yt.streams.get_highest_resolution()
+            stream.download()
+            carpeta_video = os.path.join(carpeta_descarga, "Video")
+
+            if not os.path.exists(carpeta_video):
+                os.makedirs(carpeta_video)
+            
+            mover_a_carpeta(stream.default_filename, carpeta_video)
+            print(f"✔️  Se ha descargado '{titulo}' con éxito.\n")
+        
         else:
-            mover_a_carpeta(stream.default_filename, "Video")
-
-        print(f"✔️  Se ha descargado '{titulo}' con éxito.\n")
-
-    except:
-        print("❌ Ocurrió un error al descargar el archivo, intente de nuevo.")
-        exit()
+            print(f"✘ Salteando {titulo} debido a que ya se ha descargado...\n")
+    
+    except Exception as e:
+        print(f"❌ Ocurrió un error al descargar el video: {e}\n")
 
 #------------------------------#
 
@@ -169,8 +209,8 @@ def obtener_playlist_YouTube(playlists):
 
         print("✔️  Videos de la playlist obtenidos.\n")
 
-    except:
-        print("❌ Ocurrió un error al obtener los videos de la playlist, intente de nuevo.")
+    except Exception as e:
+        print(f"❌ Ocurrió un error al obtener los videos de la playlist de YouTube: {e}")
 
 #------------------------------#
 
@@ -179,10 +219,8 @@ def obtener_playlist_Spotify(playlist_id):
     try:
         client_id = 'f8068cf75621448184edc11474e60436'
         client_secret = '243ded973fcd495f989ff84ae9e28669'
-        client_credentials_manager = SpotifyClientCredentials(
-            client_id, client_secret)
-        sp = spotipy.Spotify(
-            client_credentials_manager=client_credentials_manager)
+        client_credentials_manager = SpotifyClientCredentials(client_id, client_secret)
+        sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
 
         results = sp.playlist_items(playlist_id)
         songs = []
@@ -205,8 +243,8 @@ def obtener_playlist_Spotify(playlist_id):
 
         print("✔️  Videos de la playlist obtenidos.")
 
-    except:
-        print("❌ Ocurrió un error al obtener los videos de la playlist, intente de nuevo.")
+    except Exception as e:
+        print(f"❌ Ocurrió un error al obtener los videos de la playlist de Spotify: {e}")
 
 #------------------------------#
 
@@ -235,8 +273,7 @@ def obtener_cancion_Spotify(spotify_link):
                 f.write(youtube_link + '\n')
                 print("✔️  Video de Spotify obtenido.")
         else:
-            print(
-                "❌ Ocurrió un error al obtener los videos de la playlist, intente de nuevo.")
+            print("❌ Ocurrió un error al obtener los videos de la playlist, intente de nuevo.")
 
 #------------------------------#
 
@@ -250,7 +287,7 @@ if __name__ == '__main__':
     limpiar_pantalla()
 
     if config["Utilizar_playlist_YouTube"]:
-        print("Ingrese la url de una lista de reproducción pública de YouTube que desea descargar:")
+        print("Ingrese la url de una lista de reproducción pública/no listada de YouTube que desea descargar:")
         url = input("-> ")
         url = [url]
         print("")
