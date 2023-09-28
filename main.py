@@ -1,6 +1,6 @@
 from spotipy.oauth2 import SpotifyClientCredentials
+from mutagen.id3 import ID3, APIC, TPE1, TALB, TYER
 from youtubesearchpython import VideosSearch
-from mutagen.id3 import ID3, APIC, TPE1
 from mutagen.mp4 import MP4, MP4Cover
 from pydub import AudioSegment
 from platform import system
@@ -132,53 +132,90 @@ def archivo_duplicado(directorio, tipo, nombre):
 #------------------------------#
 
 
-#Función para obtener los nombres de los artistas como una cadena separada por comas
-def get_artist_names(track):
+# Función para obtener los nombres de los artistas como una cadena separada por comas
+def obtener_nombre_artistas(track):
     if track['artists']:
         artists = [artist['name'] for artist in track['artists']]
         return ", ".join(artists)
     return ""
 
+#------------------------------#
+
+
+# Función para obtener el nombre del álbum completo desde la API de Spotify
+def obtener_nombre_album(sp, album_id):
+    try:
+        album = sp.album(album_id)
+        if 'name' in album:
+            return album['name']
+        return None
+    except Exception as e:
+        print(f"❌ Ocurrió un error al obtener el nombre del álbum: {e}")
+        return None
+
 
 #------------------------------#
 
 
-#Función para descargar la portada y agregarla a la canción (MP3 o MP4)
-def download_song(audio_file_path, song_name, artist_name):
+# Función para descargar la portada y agregarla a la canción (MP3 o MP4)
+def descargar_metadata(audio_file_path, song_name, artist_name):
     try:
-        #Obtenga la URL de la portada del álbum y los nombres de los artistas de Spotify
+        # Obtenga la URL de la portada del álbum y los nombres de los artistas de Spotify
         client_id = 'f8068cf75621448184edc11474e60436'
         client_secret = '243ded973fcd495f989ff84ae9e28669'
         client_credentials_manager = SpotifyClientCredentials(client_id, client_secret)
         sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
         results = sp.search(q=f"{song_name} {artist_name}", type='track', limit=1)
+
         if results['tracks']['items']:
             track = results['tracks']['items'][0]
             if track['album']['images']:
                 artwork_url = track['album']['images'][0]['url']
-                artist_names = get_artist_names(track)
-                
-                #Determine el formato de archivo (mp3 o mp4)
+                artist_names = obtener_nombre_artistas(track)
+
+                # Determine el formato de archivo (mp3 o mp4)
                 file_format = os.path.splitext(audio_file_path)[1].lower()
-                
+
                 if file_format == '.mp3':
-                    #Agregue la portada  a los metadatos de la canción (mp3)
+                    # Agregue la portada a los metadatos de la canción (mp3)
                     audio = ID3(audio_file_path)
                     audio.add(APIC(3, 'image/jpeg', 3, 'Front cover', requests.get(artwork_url).content))
-                    audio.save()
-                    #Agregue los nombres de los artistas a los metadatos
+
+                    # Agregue los nombres de los artistas a los metadatos
                     audio.add(TPE1(encoding=3, text=artist_names))
+
+                    # Intenta obtener el nombre del álbum completo de la API de Spotify
+                    album_name = obtener_nombre_album(sp, track['album']['id'])
+                    if album_name:
+                        audio.add(TALB(encoding=3, text=album_name))
+
+                    # Agregue el año de publicación si está disponible
+                    if 'album' in track and 'release_date' in track['album']:
+                        audio.add(TYER(encoding=3, text=track['album']['release_date'][:4]))
+
                     audio.save()
+
                 elif file_format == '.mp4':
-                    #Agregue la portada y los nombres de los artistas a los metadatos de la canción (MP4)
+                    # Agregue la portada, los nombres de los artistas, el nombre del álbum y el año de publicación a los metadatos de la canción (MP4)
                     mp4 = MP4(audio_file_path)
-                    mp4['\xa9nam'] = song_name  #Nombre de la canción
-                    mp4['\xa9ART'] = artist_names  #Nombre de los artistas
-                    mp4['covr'] = [MP4Cover(requests.get(artwork_url).content, MP4Cover.FORMAT_JPEG)]  #Portada
+                    mp4['\xa9nam'] = song_name  # Nombre de la canción
+                    mp4['\xa9ART'] = artist_names  # Nombre de los artistas
+                    mp4['covr'] = [MP4Cover(requests.get(artwork_url).content, MP4Cover.FORMAT_JPEG)]  # Portada
+
+                    # Intenta obtener el nombre del álbum completo de la API de Spotify
+                    album_name = obtener_nombre_album(sp, track['album']['id'])
+                    if album_name:
+                        mp4['\xa9alb'] = album_name
+
+                    # Agregue el año de publicación si está disponible
+                    if 'album' in track and 'release_date' in track['album']:
+                        mp4['\xa9day'] = track['album']['release_date'][:4]
+
                     mp4.save()
+
                 else:
                     print("Formato de archivo no compatible.")
-                    
+
     except Exception as e:
         print(f"❌ Ocurrió un error al descargar la portada y los artistas: {e}\n")
 
@@ -223,7 +260,7 @@ def descargar_audio(url):
             print(f"✔️  Se ha descargado '{titulo_original}' con éxito.\n")
             
             #Llamar a la función para descargar la portada y agregarla a la canción
-            download_song(audio_file, titulo_limpio, "")  #Pasa la ruta completa del archivo descargado
+            descargar_metadata(audio_file, titulo_limpio, "")  #Pasa la ruta completa del archivo descargado
 
         else:
             print(f"✘ Salteando {titulo_original} debido a que ya se ha descargado...\n")
@@ -275,7 +312,7 @@ def descargar_video(url=False):
             print(f"✔️  Se ha descargado '{titulo_original}' con éxito.\n")
             
             #Llamar a la función para descargar la portada y agregarla a la canción
-            download_song(video_file_path, titulo_limpio, "")  #Pasa la ruta completa del archivo MP4
+            descargar_metadata(video_file_path, titulo_limpio, "")  #Pasa la ruta completa del archivo MP4
 
         else:
             print(f"✘ Salteando {titulo_original} debido a que ya se ha descargado...\n")
