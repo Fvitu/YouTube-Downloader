@@ -50,8 +50,8 @@ try:
 except:
     # Si no existe, crearlo con la configuración por defecto y salir del programa para que el usuario lo configure
     config = {
-        "Client_ID": "",  # f8068cf75621448184edc11474e60436
-        "Secret_ID": "",  # 243ded973fcd495f989ff84ae9e28669
+        "Client_ID": "",
+        "Secret_ID": "",
         "Directorio": "/",
         "Resolucion_video": "ave",
         "Descargar_video": False,
