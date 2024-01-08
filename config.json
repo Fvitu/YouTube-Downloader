@@ -1,0 +1,16 @@
+{
+    "Client_ID": "f8068cf75621448184edc11474e60436",
+    "Secret_ID": "45415e7db4bc4068b6bcc926ff300a6f",
+    "Directorio": "/",
+    "Calidad_audio_video": "max",
+    "Descargar_video": true,
+    "Descargar_audio": false,
+    "Busqueda_en_YouTube": true,
+    "Utilizar_playlist_YouTube": false,
+    "Utilizar_playlist_Spotify": false,
+    "Utilizar_link_de_YouTube": false,
+    "Utilizar_link_de_Spotify": false,
+    "Utilizar_canciones.txt": false,
+    "Eliminar_canciones.txt_automaticamente": false,
+    "Scrappear_metadata_Spotify": true
+}

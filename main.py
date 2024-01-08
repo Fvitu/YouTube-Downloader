@@ -53,7 +53,7 @@ except:
         "Client_ID": "",
         "Secret_ID": "",
         "Directorio": "/",
-        "Resolucion_video": "ave",
+        "Calidad_audio_video": "ave", # Disponible max (máxima calidad), min (mínima calidad), ave (calidad promedio)
         "Descargar_video": False,
         "Descargar_audio": True,
         "Busqueda_en_YouTube": True,
@@ -260,7 +260,6 @@ def descargar_audio(url):
         yt = YouTube(url)
         titulo_original = yt.title
 
-        # Comprobar si tiene caracteres especiales
         caracteres_especiales = ':/\\|?*"<>'
         titulo_limpio = "".join(
             c if c not in caracteres_especiales else " " for c in titulo_original
@@ -268,44 +267,42 @@ def descargar_audio(url):
 
         carpeta_descarga = config["Directorio"]
 
-        # Si la carpeta de descarga es '/' entonces se descargará en la carpeta actual
         if carpeta_descarga == "/":
             carpeta_descarga = os.path.dirname(os.path.abspath(__file__))
 
         carpeta_audio = os.path.join(carpeta_descarga, "Audio")
         crear_carpeta(carpeta_audio)
-        archivo_audio = os.path.join(
-            carpeta_audio, f"{titulo_limpio}.mp3"
-        )  # Siempre en formato MP3
+        archivo_audio = os.path.join(carpeta_audio, f"{titulo_limpio}.mp3")
         archivo_audio = os.path.normpath(archivo_audio)
 
-        # Si el archivo no se ha descargado, entonces se descargará
         if not archivo_duplicado(carpeta_descarga, "Audio", f"{titulo_limpio}.mp3"):
             print(f"🡳  Descargando audio de: '{titulo_original}'...")
-            stream = yt.streams.filter(only_audio=True).first()
 
-            # Descargar el archivo directamente en la carpeta de destino
-            archivo_temporal = os.path.join(carpeta_audio, stream.default_filename)
-            stream.download(output_path=carpeta_audio)
+            streams_disponibles = yt.streams.filter(only_audio=True).order_by("abr").desc()
 
-            # Siempre utilizar FFMPEG para convertir el archivo a MP3
-            audio = AudioSegment.from_file(archivo_temporal, format="mp4")
-            audio.export(archivo_audio, format="mp3")
-            os.remove(archivo_temporal)  # Eliminar el archivo MP4 original
+            if config["Calidad_audio_video"] == "max":
+                stream_seleccionado = streams_disponibles.first()
+            elif config["Calidad_audio_video"] == "min":
+                stream_seleccionado = streams_disponibles.last()
+            elif config["Calidad_audio_video"] == "ave":
+                # Intentar obtener 320kbps, si no está disponible, elegir la tasa de bits más baja
+                stream_seleccionado = (
+                    streams_disponibles.filter(abr="128kbps").first()
+                    or streams_disponibles.last()
+                )
+
+            # Descargar la corriente seleccionada directamente con el nombre del archivo MP3 final
+            stream_seleccionado.download(output_path=carpeta_audio, filename=f"{titulo_limpio}.mp3")
+
+            audio = AudioSegment.from_file(archivo_audio)
+            audio.export(archivo_audio, format="mp3", bitrate=stream_seleccionado.abr.replace('kbps', 'k'))
 
             if config["Scrappear_metadata_Spotify"]:
-                # Obtener el nombre del artista del video de YouTube
                 nombre_artista = obtener_artista_youtube(url)
+                descargar_metadata(archivo_audio, titulo_limpio, nombre_artista)
 
-                # Llamar a la función para descargar la portada y agregarla a la canción
-                descargar_metadata(
-                    archivo_audio, titulo_limpio, nombre_artista
-                )  # Pasa la ruta completa del archivo descargado
-
-            # Aumentar los audios descargados en 1
             audios_exito += 1
-
-            print(f"✔️  Se ha descargado '{titulo_original}' con éxito.\n")
+            print(f"✔️  Se ha descargado '{titulo_original}' con éxito en {stream_seleccionado.abr}.\n")
         else:
             print(
                 f"✘ Salteando '{titulo_original}' debido a que ya se ha descargado...\n"
@@ -313,7 +310,6 @@ def descargar_audio(url):
 
     except Exception as e:
         print(f"❌ Ocurrió un error al descargar el audio: {e}\n")
-        # Aumentar los audios fallidos en 1
         audios_error += 1
 
 
@@ -346,38 +342,42 @@ def descargar_video(url):
             print(f"🡳  Descargando video de: '{titulo_original}'...")
 
             # Obtener todas las streams disponibles (sin filtrar por formato)
-            available_streams = yt.streams.order_by("resolution").desc()
+            streams_disponibles = yt.streams.filter(file_extension="mp4", progressive=True).order_by("resolution").desc()
 
-            if config["Resolucion_video"] == "max":
-                selected_stream = available_streams.first()
-            elif config["Resolucion_video"] == "min":
-                selected_stream = available_streams.last()
-            elif config["Resolucion_video"] == "ave":
-                # Intentar obtener 720p, si no está disponible, elegir la resolución más baja
-                selected_stream = (
-                    available_streams.filter(res="720p").first()
-                    or available_streams.last()
+            stream_seleccionado = None
+            if config["Calidad_audio_video"] == "max":
+                stream_seleccionado = streams_disponibles.first()
+            elif config["Calidad_audio_video"] == "min":
+                stream_seleccionado = streams_disponibles.last()
+            elif config["Calidad_audio_video"] == "ave":
+                # Obtener la primera stream disponible de 720p, 480p, 360p o la resolución más baja si no es posible encontrar ninguna
+                stream_seleccionado = (
+                    streams_disponibles.filter(res="720p")
+                    or streams_disponibles.filter(res="480p")
+                    or streams_disponibles.filter(res="360p")
+                    or [streams_disponibles.last()]
+                ).first()
+
+            # Descargar el video con audio incorporado
+            if stream_seleccionado:
+                stream_seleccionado.download(output_path=carpeta_video, filename=f"{titulo_limpio}.mp4")
+
+                if config["Scrappear_metadata_Spotify"]:
+                    # Obtener el nombre del artista del video de YouTube
+                    nombre_artista = obtener_artista_youtube(url)
+
+                    # Llamar a la función para descargar la portada y agregarla al video
+                    descargar_metadata(archivo_mp4, titulo_limpio, nombre_artista)
+
+                # Aumentar los videos descargados en 1
+                videos_exito += 1
+
+                print(
+                    f"✔️  Se ha descargado '{titulo_original}' con éxito en la resolución {stream_seleccionado.resolution}.\n"
                 )
+            else:
+                print(f"❌ No se encontró una calidad adecuada para la descarga del video '{titulo_original}'. Inténtalo de nuevo más tarde.\n")
 
-            selected_stream.download(
-                output_path=carpeta_video, filename=f"{titulo_limpio}.mp4"
-            )
-
-            archivo_temporal = os.path.join(carpeta_video, f"{titulo_limpio}.mp4")
-
-            if config["Scrappear_metadata_Spotify"]:
-                # Obtener el nombre del artista del video de YouTube
-                artist_name = obtener_artista_youtube(url)
-
-                # Llamar a la función para descargar la portada y agregarla al video
-                descargar_metadata(archivo_temporal, titulo_limpio, artist_name)
-
-            # Aumentar los videos descargados en 1
-            videos_exito += 1
-
-            print(
-                f"✔️  Se ha descargado '{titulo_original}' con éxito en la resolución {selected_stream.resolution}.\n"
-            )
         else:
             print(
                 f"✘ Salteando '{titulo_original}' debido a que ya se ha descargado...\n"
@@ -403,7 +403,7 @@ def buscar_cancion_youtube(query):
 
         else:
             print(
-                "❌ Ocurrió un error al obtener el video de YouTube, intente de nuevo."
+                "❌ Ocurrió un error al obtener el video de YouTube, intente de nuevo.\n"
             )
             return []  # Devolver una lista vacía si no se encuentra el video
 
@@ -546,9 +546,18 @@ def editar_config():
                     with open("config.json", "w") as file:
                         json.dump(config, file, indent=4)
                 else:
-                    nuevo_valor = input(
-                        f"Ingrese el nuevo valor para '{clave_a_modificar}': "
-                    )
+                    if clave_a_modificar == "Calidad_audio_video":
+                        while True:
+                            nuevo_valor = input(
+                            f"Ingrese el nuevo valor para '{clave_a_modificar}'. Valores disponibles: max, min, ave -> "
+                            )
+                            if nuevo_valor == "max" or nuevo_valor == "min" or nuevo_valor == "ave":
+                                break
+                            print("❌ Ocurrió un error al guardar el archivo. Valores disponibles: max, min, ave")
+                    else:
+                        nuevo_valor = input(
+                            f"Ingrese el nuevo valor para '{clave_a_modificar}' -> "
+                        )
                     config[clave_a_modificar] = nuevo_valor
 
                     with open("config.json", "w") as file:
@@ -561,7 +570,7 @@ def editar_config():
         except ValueError:
             print("Por favor, ingrese un número.")
 
-        repetir = input("¿Desea modificar algo más? (S/N) ->").upper()
+        repetir = input("¿Desea modificar algo más? (S/N) -> ").upper()
         if repetir != "S":
             break
 
@@ -631,9 +640,14 @@ if __name__ == "__main__":
 
     # Descargar desde una búsqueda en YouTube
     if config["Busqueda_en_YouTube"]:
-        url = input(
-            "🔍 Ingrese el nombre del video/canción que desea buscar y luego descargar de YouTube (es recomendable agregar el artista también): "
-        )
+        while True:
+            url = input(
+                "🔍 Ingrese el nombre del video/canción que desea buscar y luego descargar de YouTube (es recomendable agregar el artista también): "
+            )
+            if url != "":
+                break
+            else:
+                print("❌ Ocurrió un error al buscar el archivo. Completa el campo de texto para descargar el archivo.\n")
         urls = []
 
         if config["Descargar_video"] or config["Descargar_audio"]:
