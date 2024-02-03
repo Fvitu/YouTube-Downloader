@@ -53,7 +53,7 @@ except:
         "Client_ID": "",
         "Secret_ID": "",
         "Directorio": "/",
-        "Calidad_audio_video": "ave",  # Disponible max (máxima calidad), min (mínima calidad), ave (calidad promedio)
+        "Calidad_audio_video": "avg",  # Disponible max (máxima calidad), min (mínima calidad), avg (calidad promedio)
         "Descargar_video": False,
         "Descargar_audio": True,
         "Busqueda_en_YouTube": True,
@@ -294,13 +294,21 @@ def descargar_audio(url):
             )
 
             if config["Calidad_audio_video"] == "max":
-                stream_seleccionado = streams_disponibles.first()
+                # Intentar obtener 360kbps, si no está disponible, elegir la tasa de bits más alta
+                stream_seleccionado = (
+                    streams_disponibles.filter(abr="360kbps").first()
+                    or streams_disponibles.first()
+                )
             elif config["Calidad_audio_video"] == "min":
+                # Elegir la tasa de bits más baja disponible
                 stream_seleccionado = streams_disponibles.last()
-            elif config["Calidad_audio_video"] == "ave":
-                # Intentar obtener 320kbps, si no está disponible, elegir la tasa de bits más baja
+            elif config["Calidad_audio_video"] == "avg":
+                # Intentar obtener 128kbps, si no está disponible, elegir una tasa de bits menor a 128kbps que no sea la última
                 stream_seleccionado = (
                     streams_disponibles.filter(abr="128kbps").first()
+                    or streams_disponibles.filter(
+                        abr__lt="128kbps", abr__ne=streams_disponibles.last().abr
+                    ).first()
                     or streams_disponibles.last()
                 )
 
@@ -386,7 +394,7 @@ def descargar_video(url):
                 stream_seleccionado = streams_disponibles.first()
             elif config["Calidad_audio_video"] == "min":
                 stream_seleccionado = streams_disponibles.last()
-            elif config["Calidad_audio_video"] == "ave":
+            elif config["Calidad_audio_video"] == "avg":
                 # Obtener la primera stream disponible de 720p, 480p, 360p o la resolución más baja si no es posible encontrar ninguna
                 stream_seleccionado = (
                     streams_disponibles.filter(res="720p")
@@ -593,16 +601,16 @@ def editar_config():
                     if clave_a_modificar == "Calidad_audio_video":
                         while True:
                             nuevo_valor = input(
-                                f"Ingrese el nuevo valor para '{clave_a_modificar}'. Valores disponibles: max, min, ave -> "
+                                f"Ingrese el nuevo valor para '{clave_a_modificar}'. Valores disponibles: max, min, avg -> "
                             )
                             if (
                                 nuevo_valor == "max"
                                 or nuevo_valor == "min"
-                                or nuevo_valor == "ave"
+                                or nuevo_valor == "avg"
                             ):
                                 break
                             print(
-                                "❌ Ocurrió un error al guardar el archivo. Valores disponibles: max, min, ave"
+                                "❌ Ocurrió un error al guardar el archivo. Valores disponibles: max, min, avg"
                             )
                     else:
                         nuevo_valor = input(
