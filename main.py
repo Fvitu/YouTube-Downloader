@@ -16,6 +16,10 @@ import json
 import os
 
 
+import time
+import concurrent.futures
+
+
 # ------------------------------ #
 
 
@@ -68,6 +72,7 @@ except:
         "Eliminar_canciones.txt_automaticamente": False,
         "Scrappear_metadata_Spotify": True,
         "Convertir_a_zip": False,
+        "Mostrar_tiempo_de_ejecucion": True,
     }
     with open("config.json", "w") as f:
         json.dump(config, f, indent=4)
@@ -479,8 +484,7 @@ def obtener_playlist(plataforma, playlist_url):
 
         if plataforma == "YouTube":
             playlist = Playlist(playlist_url)
-            for url_video in playlist.video_urls:
-                urls.append(url_video)
+            urls.extend(playlist.video_urls)
 
         elif plataforma == "Spotify":
             client_credentials_manager = SpotifyClientCredentials(
@@ -505,21 +509,29 @@ def obtener_playlist(plataforma, playlist_url):
                 if offset >= resultados["total"]:
                     break
 
-            links_youtube = []
-            for nombre_cancion, nombre_artista in canciones_totales:
-                query = f"{nombre_cancion} {nombre_artista} Oficial"
+            urls = []
+
+            # Definimos una función para buscar videos en YouTube
+            def buscar_video(query):
                 busqueda_videos = VideosSearch(query, limit=1)
                 resultado_video = busqueda_videos.result()["result"][0]
                 link_youtube = (
                     "https://www.youtube.com/watch?v=" + resultado_video["id"]
                 )
-                links_youtube.append(link_youtube)
+                return link_youtube
 
-            urls.extend(links_youtube)
+            # Usamos ThreadPoolExecutor para buscar videos concurrentemente
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                consultas_youtube = [
+                    f"{nombre_cancion} {nombre_artista} Oficial"
+                    for nombre_cancion, nombre_artista in canciones_totales
+                ]
+                resultados_youtube = list(executor.map(buscar_video, consultas_youtube))
+                urls.extend(resultados_youtube)
 
-        print(
-            f"✔️  Se han obtenido {len(urls)} video(s) de la playlist de {plataforma}.\n"
-        )
+            print(
+                f"✔️  Se han obtenido {len(urls)} video(s) de la playlist de {plataforma}.\n"
+            )
         return urls
 
     except Exception as e:
@@ -786,6 +798,8 @@ if __name__ == "__main__":
             archivos_a_zip(os.path.abspath("Audio"))
 
     # Procesar todas las descargas
+    if config["Mostrar_tiempo_de_ejecucion"]:
+        inicio = time.time()
     procesar_descargas(urls)
 
     if config["Eliminar_canciones.txt_automaticamente"]:
@@ -810,4 +824,7 @@ if __name__ == "__main__":
             f"❌ Han ocurrido {audios_error + videos_error} errores, de los cuales {audios_error} eran audios y {videos_error} eran videos."
         )
 
+    if config["Mostrar_tiempo_de_ejecucion"]:
+        fin = time.time()
+        print(f"Fin. Tiempo de ejecución {fin - inicio}s")
     input("Presiona 'Enter' para finalizar la ejecución.")
