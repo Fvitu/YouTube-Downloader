@@ -9,6 +9,7 @@ from pytube import YouTube
 from time import sleep
 from art import *
 import requests
+import zipfile
 import spotipy
 import shutil
 import json
@@ -18,6 +19,7 @@ import os
 # ------------------------------ #
 
 
+# Variables de éxito y error para ser mostradas al final del programa.
 audios_exito = 0
 audios_error = 0
 
@@ -28,7 +30,7 @@ videos_error = 0
 # ------------------------------ #
 
 
-# Función para eliminar la consola dependiendo del sistema operativo
+# Función para eliminar la consola dependiendo del sistema operativo.
 def limpiar_pantalla():
     if system() == "Windows":
         os.system("cls")
@@ -39,6 +41,7 @@ def limpiar_pantalla():
 # ------------------------------ #
 
 
+# Crear el archivo de configuración si es que no existe.
 try:
     # Verificar si existe el archivo de configuración
     with open("config.json", "r") as f:
@@ -64,6 +67,7 @@ except:
         "Utilizar_canciones.txt": False,
         "Eliminar_canciones.txt_automaticamente": False,
         "Scrappear_metadata_Spotify": True,
+        "Convertir_a_zip": False,
     }
     with open("config.json", "w") as f:
         json.dump(config, f, indent=4)
@@ -98,6 +102,7 @@ else:
 # ------------------------------ #
 
 
+# Función para crear carpetas determinadas si es que no existen.
 def crear_carpeta(carpeta):
     if not os.path.exists(carpeta):
         os.makedirs(carpeta)
@@ -106,7 +111,7 @@ def crear_carpeta(carpeta):
 # ------------------------------ #
 
 
-# Función para mover archivos a una carpeta específica
+# Función para mover archivos a una carpeta específica.
 def mover_archivo(cancion, carpeta):
     mp4_path = os.path.join(carpeta, cancion)
     shutil.move(cancion, mp4_path)
@@ -115,7 +120,7 @@ def mover_archivo(cancion, carpeta):
 # ------------------------------ #
 
 
-# Función para verificar si el archivo ya existe
+# Función para verificar si el archivo ya existe.
 def archivo_duplicado(directorio, tipo, nombre):
     try:
         carpeta_tipo = tipo.capitalize()  # Convertir a mayúscula la primera letra
@@ -130,7 +135,7 @@ def archivo_duplicado(directorio, tipo, nombre):
 # ------------------------------ #
 
 
-# Función para obtener el nombre del artista de YouTube
+# Función para obtener el nombre del artista de YouTube.
 def obtener_artista_youtube(url):
     try:
         yt = YouTube(url)
@@ -143,7 +148,7 @@ def obtener_artista_youtube(url):
 # ------------------------------ #
 
 
-# Función para obtener los nombres de los artistas como una cadena separada por comas
+# Función para obtener los nombres de los artistas como una cadena separada por comas.
 def obtener_nombre_artistas(track):
     if track["artists"]:
         artists = [artist["name"] for artist in track["artists"]]
@@ -154,7 +159,7 @@ def obtener_nombre_artistas(track):
 # ------------------------------ #
 
 
-# Función para obtener el nombre del álbum completo desde la API de Spotify
+# Función para obtener el nombre del álbum completo desde la API de Spotify.
 def obtener_nombre_album(sp, album_id):
     try:
         album = sp.album(album_id)
@@ -169,7 +174,7 @@ def obtener_nombre_album(sp, album_id):
 # ------------------------------ #
 
 
-# Función para descargar la portada y agregarla a la canción (MP3 o MP4)
+# Función para descargar la portada y agregarla a la canción (MP3 o MP4).
 def descargar_metadata(ruta_del_archivo, nombre_archivo, nombre_artista):
     try:
         # Inicializar cliente de autenticación de Spotify
@@ -253,7 +258,7 @@ def descargar_metadata(ruta_del_archivo, nombre_archivo, nombre_artista):
 # ------------------------------ #
 
 
-# Función principal para descargar el audio de un video de YouTube
+# Función principal para descargar el audio de un video de YouTube.
 def descargar_audio(url):
     global audios_exito, audios_error
     try:
@@ -346,7 +351,7 @@ def descargar_audio(url):
 # ------------------------------ #
 
 
-# Función para descargar el video de YouTube y agregar la portada y los artistas a la metadata
+# Función para descargar el video de YouTube y agregar la portada y los artistas a la metadata.
 def descargar_video(url):
     global videos_exito, videos_error
     try:
@@ -441,6 +446,7 @@ def descargar_video(url):
 # ------------------------------ #
 
 
+# Función para buscar la canción en el motor de búsqueda de YouTube y devolver el link.
 def buscar_cancion_youtube(query):
     try:
         busqueda_videos = VideosSearch(f"{query.title()} Oficial", limit=1)
@@ -464,7 +470,7 @@ def buscar_cancion_youtube(query):
 # ------------------------------ #
 
 
-# Función para obtener los videos de una playlist de YouTube o Spotify en un archivo de texto
+# Función para obtener los videos de una playlist de YouTube o Spotify en un archivo de texto.
 def obtener_playlist(plataforma, playlist_url):
     try:
         print(f"↻ Obteniendo canciones de la playlist de {plataforma}...")
@@ -526,7 +532,7 @@ def obtener_playlist(plataforma, playlist_url):
 # ------------------------------ #
 
 
-# Función para obtener el link de YouTube de una canción de Spotify
+# Función para obtener el link de YouTube de una canción de Spotify.
 def obtener_cancion_Spotify(link_spotify):
     try:
         client_credentials_manager = SpotifyClientCredentials(client_id, client_secret)
@@ -561,6 +567,7 @@ def obtener_cancion_Spotify(link_spotify):
 # ------------------------------ #
 
 
+# Función para editar el archivo config.json directamente desde la ejecución del programa.
 def editar_config():
     while True:
         limpiar_pantalla()
@@ -636,6 +643,37 @@ def editar_config():
 # ------------------------------ #
 
 
+# Función para comprimir los archivos en una carpeta.
+def archivos_a_zip(carpeta):
+    try:
+        archivos = os.listdir(carpeta)
+        nombre_zip = os.path.join(carpeta, f"{os.path.basename(carpeta)}.zip")
+
+        # Crear un objeto ZipFile en modo escritura
+        with zipfile.ZipFile(nombre_zip, "w") as zipf:
+            # Recorrer los archivos y agregarlos al archivo zip
+            for archivo in archivos:
+                ruta_completa = os.path.join(carpeta, archivo)
+                zipf.write(ruta_completa, archivo)
+
+        # Eliminar los archivos originales
+        for archivo in archivos:
+            ruta_completa = os.path.join(carpeta, archivo)
+            os.remove(ruta_completa)
+
+        print(
+            "📂 Los archivos en la carpeta '{}' han sido comprimidos.\n".format(
+                carpeta.split("\\")[-1]
+            )
+        )
+    except Exception as e:
+        print(f"❌ Ocurrió un error al comprimir el archivo: {e}")
+
+
+# ------------------------------ #
+
+
+# Inicio del programa.
 if __name__ == "__main__":
     limpiar_pantalla()
     tprint("YouTube - Downloader")
@@ -731,12 +769,21 @@ if __name__ == "__main__":
                 # Descargar tanto el video como el audio si está habilitado
                 descargar_video(url)
                 descargar_audio(url)
+
             elif config["Descargar_video"]:
                 # Descargar solo el video si está habilitado
                 descargar_video(url)
+
             elif config["Descargar_audio"]:
                 # Descargar solo el audio si está habilitado
                 descargar_audio(url)
+
+        # Comprimir la carpeta de Videos o Audios si está habilitado
+        if config["Descargar_video"] and config["Convertir_a_zip"]:
+            archivos_a_zip(os.path.abspath("Video"))
+
+        if config["Descargar_audio"] and config["Convertir_a_zip"]:
+            archivos_a_zip(os.path.abspath("Audio"))
 
     # Procesar todas las descargas
     procesar_descargas(urls)
