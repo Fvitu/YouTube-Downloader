@@ -186,6 +186,8 @@ def descargar_metadata(ruta_del_archivo, nombre_archivo, nombre_artista):
         client_credentials_manager = SpotifyClientCredentials(client_id, client_secret)
         sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
 
+        caracteres_especiales = ':/\\|?*"<>'
+
         # Buscar la canción en Spotify
         resultados = sp.search(
             q=f"{nombre_archivo} {nombre_artista}", type="track", limit=1
@@ -220,7 +222,12 @@ def descargar_metadata(ruta_del_archivo, nombre_archivo, nombre_artista):
                     # Intentar obtener el nombre del álbum completo de la API de Spotify
                     nombre_album = obtener_nombre_album(sp, track["album"]["id"])
                     if nombre_album:
-                        audio.add(TALB(encoding=3, text=nombre_album))
+                        # Limpiar caracteres especiales del nombre del álbum
+                        nombre_album_limpio = "".join(
+                            c if c not in caracteres_especiales else " "
+                            for c in nombre_album
+                        )
+                        audio.add(TALB(encoding=3, text=nombre_album_limpio))
 
                     # Agregar el año de publicación si está disponible
                     if "album" in track and "release_date" in track["album"]:
@@ -238,14 +245,19 @@ def descargar_metadata(ruta_del_archivo, nombre_archivo, nombre_artista):
                     mp4["covr"] = [
                         MP4Cover(
                             data=requests.get(url_artwork).content,
-                            imageformat=MP4Cover.FORMAT_JPEG,
+                            imageformat=MP4Cover.FORMAT_PNG,
                         )
                     ]  # Portada
 
                     # Intentar obtener el nombre del álbum completo de la API de Spotify
                     nombre_album = obtener_nombre_album(sp, track["album"]["id"])
                     if nombre_album:
-                        mp4["\xa9alb"] = nombre_album
+                        # Limpiar caracteres especiales del nombre del álbum
+                        nombre_album_limpio = "".join(
+                            c if c not in caracteres_especiales else " "
+                            for c in nombre_album
+                        )
+                        mp4["\xa9alb"] = nombre_album_limpio
 
                     # Agregar el año de publicación si está disponible
                     if "album" in track and "release_date" in track["album"]:
@@ -345,7 +357,7 @@ def descargar_audio(url):
             )
         else:
             print(
-                f"✘ Salteando '{titulo_original}' debido a que ya se ha descargado...\n"
+                f"✘ Salteando el audio de '{titulo_original}' debido a que ya se ha descargado...\n"
             )
 
     except Exception as e:
@@ -416,7 +428,8 @@ def descargar_video(url):
             # Descargar el video con audio incorporado
             if stream_seleccionado:
                 stream_seleccionado.download(
-                    output_path=carpeta_video, filename=f"{titulo_limpio}.mp4"
+                    output_path=carpeta_video,
+                    filename=f"{titulo_limpio} - {canal_limpio}.mp4",
                 )
 
                 if config["Scrappear_metadata_Spotify"]:
@@ -439,7 +452,7 @@ def descargar_video(url):
 
         else:
             print(
-                f"✘ Salteando '{titulo_original}' debido a que ya se ha descargado...\n"
+                f"✘ Salteando el video de '{titulo_original}' debido a que ya se ha descargado...\n"
             )
 
     except Exception as e:
