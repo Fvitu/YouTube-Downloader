@@ -6,18 +6,16 @@ from pydub import AudioSegment
 from platform import system
 from pytube import Playlist
 from pytube import YouTube
+import concurrent.futures
 from time import sleep
 from art import *
 import requests
 import zipfile
 import spotipy
 import shutil
+import time
 import json
 import os
-
-
-import time
-import concurrent.futures
 
 
 # ------------------------------ #
